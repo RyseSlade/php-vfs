@@ -1,0 +1,32 @@
+{
+    "name": "aedon/php-vfs",
+    "type": "library",
+    "prefer-stable": true,
+    "require": {
+        "php": "^8.4.1",
+        "ext-posix": "*"
+    },
+    "require-dev": {
+        "phpunit/phpunit": "^13",
+        "vimeo/psalm": "^6"
+    },
+    "autoload": {
+        "psr-4": {
+            "Aedon\\VFS\\": "src"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "Aedon\\VFSTest\\": "tests"
+        }
+    },
+    "extra": {
+        "branch-alias": {
+            "dev-latest": "1.0.x-dev"
+        }
+    },
+    "scripts": {
+        "analyse": "./vendor/bin/psalm",
+        "test": "./vendor/bin/phpunit --testdox"
+    }
+}
