@@ -8,6 +8,7 @@ use RuntimeException;
 
 use function array_keys;
 use function assert;
+use function basename;
 use function in_array;
 use function is_array;
 use function str_contains;
@@ -347,5 +348,16 @@ final class VirtualFileSystem
         }
 
         return $parentNode;
+    }
+
+    public function moveDirectory(string $fromPath, string $toPath): void
+    {
+        $fromNode = $this->node($fromPath);
+
+        $fromNode->filename = basename($toPath);
+        $fromNode->path = $toPath;
+
+        $this->nodes[$toPath] = $fromNode;
+        unset($this->nodes[$fromPath]);
     }
 }

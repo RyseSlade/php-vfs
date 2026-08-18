@@ -662,4 +662,30 @@ final class StreamWrapper
 
         return false;
     }
+
+    private function rename(string $path_from, string $path_to): bool
+    {
+        $nodeFrom = $this->vfs()->node($path_from);
+        $nodeTo = $this->vfs()->node($path_to);
+
+        if (!$this->permissions()->canRead($nodeFrom) || !$this->permissions()->canWrite($nodeTo)) {
+            return false;
+        }
+
+        if (!$nodeTo instanceof EmptyNode) {
+            return false;
+        }
+
+        if ($nodeFrom instanceof DirectoryNode) {
+            $this->vfs()->moveDirectory($nodeFrom->path, $nodeTo->path);
+        } else if ($nodeFrom instanceof FileNode) {
+            $this->vfs()->addFile($nodeTo->path, $nodeFrom->content);
+            $this->vfs()->removeNode($nodeFrom->path);
+        } else if ($nodeFrom instanceof SymlinkNode) {
+            $this->vfs()->addSymlink($nodeTo->path, (string)$nodeFrom->linkTarget?->path);
+            $this->vfs()->removeNode($nodeFrom->path);
+        }
+
+        return true;
+    }
 }

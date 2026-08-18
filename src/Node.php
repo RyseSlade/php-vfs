@@ -14,8 +14,8 @@ abstract class Node
     public int $size = 0;
 
     public function __construct(
-        public readonly string $filename,
-        public readonly string $path,
+        public string $filename,
+        public string $path,
         public int $permissions,
         public int $userId,
         public int $groupId
