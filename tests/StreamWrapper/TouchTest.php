@@ -20,18 +20,40 @@ final class TouchTest extends TestCase
         ]);
     }
 
+    public function testShouldUpdateFileCreateTimestamp(): void
+    {
+        $subject = $this->buildSubject();
+
+        $subject->node('filename')->ctime = time() - 60;
+
+        $result = touch($subject->path('filename'));
+
+        self::assertTrue($result);
+        self::assertGreaterThanOrEqual(time() - 1, $subject->node('filename')->ctime);
+    }
+
     public function testShouldUpdateFileModifiedTimestamp(): void
     {
         $subject = $this->buildSubject();
 
         $subject->node('filename')->mtime = time() - 60;
 
-        $mtime = $subject->node('filename')->mtime;
+        $result = touch($subject->path('filename'));
+
+        self::assertTrue($result);
+        self::assertGreaterThanOrEqual(time() - 1, $subject->node('filename')->mtime);
+    }
+
+    public function testShouldUpdateFileAccessTimestamp(): void
+    {
+        $subject = $this->buildSubject();
+
+        $subject->node('filename')->atime = time() - 60;
 
         $result = touch($subject->path('filename'));
 
         self::assertTrue($result);
-        self::assertGreaterThan($mtime, $subject->node('filename')->mtime);
+        self::assertGreaterThan(time() - 1, $subject->node('filename')->atime);
     }
 
     public function testShouldUpdateSymlinkFileModifiedTimestamp(): void

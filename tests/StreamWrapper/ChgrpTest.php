@@ -62,4 +62,15 @@ final class ChgrpTest extends TestCase
         self::assertFalse($result);
         self::assertEquals(1000, $subject->node('filename')->groupId);
     }
+
+    public function testShouldUpdateCTime(): void
+    {
+        $subject = $this->buildSubject();
+
+        $subject->node('filename')->ctime = time() - 30;
+
+        chgrp($subject->path('filename'), 2000);
+
+        self::assertGreaterThanOrEqual(time() - 1, $subject->node('filename')->ctime);
+    }
 }

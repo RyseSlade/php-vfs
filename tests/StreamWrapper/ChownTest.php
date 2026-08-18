@@ -8,6 +8,7 @@ use Aedon\VFS\VirtualFileSystem;
 use PHPUnit\Framework\TestCase;
 
 use function chown;
+use function time;
 
 final class ChownTest extends TestCase
 {
@@ -60,5 +61,40 @@ final class ChownTest extends TestCase
 
         self::assertFalse($result);
         self::assertEquals(1000, $subject->node('filename')->userId);
+    }
+
+    public function testShouldNotUpdateMTime(): void
+    {
+        $subject = $this->buildSubject();
+
+        $subject->node('filename')->mtime = time() - 30;
+        $mtime = $subject->node('filename')->mtime;
+
+        chown($subject->path('filename'), 2000);
+
+        self::assertEquals($mtime, $subject->node('filename')->mtime);
+    }
+
+    public function testShouldUpdateCTime(): void
+    {
+        $subject = $this->buildSubject();
+
+        $subject->node('filename')->ctime = time() - 30;
+
+        chown($subject->path('filename'), 2000);
+
+        self::assertGreaterThanOrEqual(time() - 1, $subject->node('filename')->ctime);
+    }
+
+    public function testShouldNotUpdateATime(): void
+    {
+        $subject = $this->buildSubject();
+
+        $subject->node('filename')->atime = time() - 30;
+        $atime = $subject->node('filename')->atime;
+
+        chown($subject->path('filename'), 2000);
+
+        self::assertEquals($atime, $subject->node('filename')->atime);
     }
 }

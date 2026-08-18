@@ -13,6 +13,7 @@ use function error_reporting;
 use function file_put_contents;
 use function restore_error_handler;
 use function set_error_handler;
+use function time;
 
 final class FilePutContentsTest extends TestCase
 {
@@ -128,5 +129,38 @@ final class FilePutContentsTest extends TestCase
         $node = $subject->node('filename');
 
         self::assertEquals('new content', $node->content);
+    }
+
+    public function testShouldUpdateMTime(): void
+    {
+        $subject = $this->buildSubject();
+
+        $subject->node('filename')->mtime = time() - 30;
+
+        file_put_contents($subject->path('filename'), 'new content');
+
+        self::assertGreaterThanOrEqual(time() - 1, $subject->node('filename')->mtime);
+    }
+
+    public function testShouldUpdateCTime(): void
+    {
+        $subject = $this->buildSubject();
+
+        $subject->node('filename')->ctime = time() - 30;
+
+        file_put_contents($subject->path('filename'), 'new content');
+
+        self::assertGreaterThanOrEqual(time() - 1, $subject->node('filename')->ctime);
+    }
+
+    public function testShouldUpdateATime(): void
+    {
+        $subject = $this->buildSubject();
+
+        $subject->node('filename')->atime = time() - 30;
+
+        file_put_contents($subject->path('filename'), 'new content');
+
+        self::assertGreaterThanOrEqual(time() - 1, $subject->node('filename')->atime);
     }
 }

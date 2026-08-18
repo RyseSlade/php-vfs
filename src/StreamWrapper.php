@@ -255,11 +255,11 @@ final class StreamWrapper
             self::$streamWrapperContexts[] = $this->registerStreamWrapper($this, $node, $mode);
         }
 
+        $streamWrapperContext = $this->streamWrapperContext();
+
+        assert($streamWrapperContext !== null);
+
         if (str_contains($mode, 'a')) {
-            $streamWrapperContext = $this->streamWrapperContext();
-
-            assert($streamWrapperContext !== null);
-
             $node = $streamWrapperContext->node;
 
             assert($node instanceof FileNode);
@@ -272,6 +272,8 @@ final class StreamWrapper
         if ($options & STREAM_USE_PATH) {
             $opened_path = $node->path();
         }
+
+        $streamWrapperContext->node->atime = time();
 
         return true;
     }
@@ -384,8 +386,6 @@ final class StreamWrapper
             return;
         }
 
-        $streamWrapperContext->node->atime = time();
-
         foreach (self::$streamWrapperContexts as $index => $streamWrapperContext) {
             if ($streamWrapperContext->streamWrapper === $this) {
                 unset(self::$streamWrapperContexts[$index]);
@@ -410,7 +410,10 @@ final class StreamWrapper
                 if (!$this->permissions()->canWrite($node)) {
                     return false;
                 }
-                $node->mtime = time();
+                $time = time();
+                $node->mtime = $time;
+                $node->atime = $time;
+                $node->ctime = $time;
                 break;
             case STREAM_META_OWNER_NAME:
                 throw new RuntimeException('STREAM_META_OWNER_NAME is not implemented');
@@ -419,6 +422,7 @@ final class StreamWrapper
                     return false;
                 }
                 $node->userId = $value;
+                $node->ctime = time();
                 break;
             case STREAM_META_GROUP_NAME:
                 throw new RuntimeException('STREAM_META_GROUP_NAME is not implemented');
@@ -427,6 +431,7 @@ final class StreamWrapper
                     return false;
                 }
                 $node->groupId = $value;
+                $node->ctime = time();
                 break;
             case STREAM_META_ACCESS:
                 if (!$this->permissions()->canWrite($node) && getmyuid() !== $node->userId) {
@@ -435,6 +440,7 @@ final class StreamWrapper
 
                 if (is_int($value)) {
                     $node->permissions = $value;
+                    $node->ctime = time();
                 } else {
                     throw new RuntimeException('STREAM_META_ACCESS is not implemented');
                 }
@@ -501,6 +507,11 @@ final class StreamWrapper
         }
 
         $node->content .= $data;
+
+        if ($data) {
+            $streamWrapperContext->node->mtime = time();
+            $streamWrapperContext->node->ctime = time();
+        }
 
         return strlen($data);
     }
