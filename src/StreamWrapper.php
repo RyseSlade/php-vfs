@@ -267,6 +267,7 @@ final class StreamWrapper
             $streamWrapperContext->position = strlen($node->content);
         } else if (str_contains($mode, 'w')) {
             $node->content = '';
+            $node->size = 0;
         }
 
         if ($options & STREAM_USE_PATH) {
@@ -511,6 +512,7 @@ final class StreamWrapper
         if ($data) {
             $streamWrapperContext->node->mtime = time();
             $streamWrapperContext->node->ctime = time();
+            $node->size = strlen($node->content);
         }
 
         return strlen($data);
@@ -595,6 +597,8 @@ final class StreamWrapper
         } else {
             $node->content = str_pad($node->content, $new_size, "\0", STR_PAD_RIGHT);
         }
+
+        $node->size = strlen($node->content);
 
         return true;
     }

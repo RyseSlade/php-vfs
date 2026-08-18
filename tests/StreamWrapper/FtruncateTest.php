@@ -39,6 +39,7 @@ final class FtruncateTest extends TestCase
         $node = $subject->node('filename');
 
         self::assertEquals('con', $node->content);
+        self::assertEquals(3, $node->size);
     }
 
     public function testShouldNotUpdateFilePointer(): void

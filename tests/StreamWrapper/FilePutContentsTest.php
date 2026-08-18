@@ -38,6 +38,7 @@ final class FilePutContentsTest extends TestCase
         $node = $subject->node('filename');
 
         self::assertEquals('new content', $node->content);
+        self::assertEquals(11, $node->size);
     }
 
     public function testShouldAppendContentToFile(): void
