@@ -73,6 +73,8 @@ final class MkdirTest extends TestCase
         self::assertTrue($result);
         self::assertInstanceOf(DirectoryNode::class, $subject->node('directory/subdirectory'));
         self::assertInstanceOf(DirectoryNode::class, $subject->node('directory/subdirectory/nextdirectory'));
+        self::assertEquals(0755, $subject->node('directory/subdirectory')->permissions);
+        self::assertEquals(0755, $subject->node('directory/subdirectory/nextdirectory')->permissions);
     }
 
     public function testShouldNotCreateExistingDirectory(): void

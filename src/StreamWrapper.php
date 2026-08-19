@@ -11,6 +11,7 @@ use ValueError;
 use function assert;
 use function call_user_func_array;
 use function count;
+use function dirname;
 use function explode;
 use function get_class;
 use function getmyuid;
@@ -665,26 +666,120 @@ final class StreamWrapper
 
     private function rename(string $path_from, string $path_to): bool
     {
-        $nodeFrom = $this->vfs()->node($path_from);
         $nodeTo = $this->vfs()->node($path_to);
-
-        if (!$this->permissions()->canRead($nodeFrom) || !$this->permissions()->canWrite($nodeTo)) {
-            return false;
-        }
 
         if (!$nodeTo instanceof EmptyNode) {
             return false;
         }
 
-        if ($nodeFrom instanceof DirectoryNode) {
-            $this->vfs()->moveDirectory($nodeFrom->path, $nodeTo->path);
-        } else if ($nodeFrom instanceof FileNode) {
-            $this->vfs()->addFile($nodeTo->path, $nodeFrom->content);
-            $this->vfs()->removeNode($nodeFrom->path);
-        } else if ($nodeFrom instanceof SymlinkNode) {
-            $this->vfs()->addSymlink($nodeTo->path, (string)$nodeFrom->linkTarget?->path);
-            $this->vfs()->removeNode($nodeFrom->path);
+        $nodeFrom = $this->vfs()->node($path_from);
+
+        if ($nodeFrom instanceof EmptyNode) {
+            return false;
         }
+
+        if (dirname($nodeFrom->path) !== dirname($nodeTo->path)) {
+            return false;
+        }
+
+        $directory = $this->vfs()->directory($nodeFrom->path);
+
+        if ($directory === null || !$this->permissions()->canWrite($directory)) {
+            return false;
+        }
+
+        $this->vfs()->renameNode($nodeFrom->path, $nodeTo->path);
+
+        return true;
+    }
+
+    /**
+     * @psalm-suppress UnusedParam
+     */
+    private function dir_opendir(string $path, int $options): bool
+    {
+        $node = $this->vfs()->node($path);
+
+        if (!$node instanceof DirectoryNode) {
+            return false;
+        }
+
+        if (!$this->permissions()->canRead($node)) {
+            return false;
+        }
+
+        if ($this->streamWrapperContext() === null) {
+            self::$streamWrapperContexts[] = $this->registerStreamWrapper($this, $node);
+        }
+
+        // Does not affect timestamps
+
+        $streamWrapperContenxt = $this->streamWrapperContext();
+
+        assert($streamWrapperContenxt !== null);
+
+        $streamWrapperContenxt->position = 0;
+
+        return true;
+    }
+
+    private function dir_closedir(): bool
+    {
+        $streamWrapperContext = $this->streamWrapperContext();
+
+        if ($streamWrapperContext === null) {
+            return false;
+        }
+
+        foreach (self::$streamWrapperContexts as $index => $streamWrapperContext) {
+            if ($streamWrapperContext->streamWrapper === $this) {
+                unset(self::$streamWrapperContexts[$index]);
+            }
+        }
+
+        return true;
+    }
+
+    private function dir_readdir(): string|bool
+    {
+        $streamWrapperContext = $this->streamWrapperContext();
+
+        if ($streamWrapperContext === null) {
+            return false;
+        }
+
+        $node = $streamWrapperContext->node;
+
+        assert($node instanceof DirectoryNode);
+
+        if ($streamWrapperContext->position === 0) {
+            $streamWrapperContext->position++;
+            return '.';
+        } else if ($streamWrapperContext->position === 1) {
+            $streamWrapperContext->position++;
+            return '..';
+        }
+
+        if (isset($node->children[$streamWrapperContext->position - 2])) {
+            $filename = $node->children[$streamWrapperContext->position - 2]->filename;
+
+            $streamWrapperContext->position++;
+
+            return $filename;
+        }
+
+        return false;
+    }
+
+    private function dir_rewinddir(): bool
+    {
+        $streamWrapperContext = $this->streamWrapperContext();
+
+        if ($streamWrapperContext === null) {
+            return false;
+        }
+
+        $streamWrapperContext->position = 0;
 
         return true;
     }

@@ -16,8 +16,8 @@ final class DirectoryNodeTest extends TestCase
     private function buildSubject(): DirectoryNode
     {
         return new DirectoryNode('directoryA', 'directoryA', VirtualFileSystem::DEFAULT_PERMISSIONS, 1000, 2000, [
-            'directoryA/filename' => new FileNode('filename', 'directoryA/filename', VirtualFileSystem::DEFAULT_PERMISSIONS, 1000, 2000, ''),
-            'directoryA/directoryB' => new DirectoryNode('directoryB', 'directoryA/directoryB', VirtualFileSystem::DEFAULT_PERMISSIONS, 1000, 2000, []),
+            new FileNode('filename', 'directoryA/filename', VirtualFileSystem::DEFAULT_PERMISSIONS, 1000, 2000, ''),
+            new DirectoryNode('directoryB', 'directoryA/directoryB', VirtualFileSystem::DEFAULT_PERMISSIONS, 1000, 2000, []),
         ]);
     }
 
@@ -81,8 +81,8 @@ final class DirectoryNodeTest extends TestCase
 
         self::assertCount(2, $subject->children);
 
-        self::assertInstanceOf(FileNode::class, $subject->children['directoryA/filename']);
-        self::assertInstanceOf(DirectoryNode::class, $subject->children['directoryA/directoryB']);
+        self::assertInstanceOf(FileNode::class, $subject->children[0]);
+        self::assertInstanceOf(DirectoryNode::class, $subject->children[1]);
     }
 
     public function testShouldAddChild(): void
@@ -91,7 +91,9 @@ final class DirectoryNodeTest extends TestCase
 
         $subject->addChild(new FileNode('filename', 'directoryA/directoryB/filename', VirtualFileSystem::DEFAULT_PERMISSIONS, VirtualFileSystem::DEFAULT_USER_ID, VirtualFileSystem::DEFAULT_GROUP_ID, ''));
 
-        self::assertInstanceOf(FileNode::class, $subject->children['directoryA/directoryB/filename']);
+        self::assertCount(3, $subject->children);
+
+        self::assertInstanceOf(FileNode::class, $subject->children[2]);
     }
 
     public function testShouldRemoveChild(): void

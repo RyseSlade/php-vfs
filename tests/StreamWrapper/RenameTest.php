@@ -75,6 +75,39 @@ final class RenameTest extends TestCase
         $node = $subject->node('symlink2');
 
         self::assertInstanceOf(SymlinkNode::class, $node);
-        self::assertEquals('filename', $node->target);
+        self::assertEquals('@filename', $node->target);
+    }
+
+    public function testShouldRenameWithoutFilePermissions(): void
+    {
+        $subject = $this->buildSubject();
+
+        $subject->node('filename')->permissions = 0000;
+
+        $result = rename($subject->path('filename'), $subject->path('filename2'));
+
+        self::assertTrue($result);
+
+        /** @var FileNode $node */
+        $node = $subject->node('filename2');
+
+        self::assertInstanceOf(FileNode::class, $node);
+        self::assertEquals('content', $node->content);
+        self::assertEquals(7, $node->size);
+    }
+
+    public function testShouldNotRenameFileWithoutDirectoryWritePermission(): void
+    {
+        $subject = $this->buildSubject();
+
+        $directoryNode = $subject->directory('filename');
+
+        self::assertInstanceOf(DirectoryNode::class, $directoryNode);
+
+        $directoryNode->permissions = 0000;
+
+        $result = rename($subject->path('filename'), $subject->path('filename2'));
+
+        self::assertFalse($result);
     }
 }

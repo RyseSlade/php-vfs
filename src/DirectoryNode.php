@@ -7,12 +7,12 @@ namespace Aedon\VFS;
 final class DirectoryNode extends Node
 {
     /**
-     * @var array<string, Node>
+     * @var array<array-key, Node>
      */
     public array $children;
 
     /**
-     * @param array<string, Node> $children
+     * @param array<array-key, Node> $children
      */
     public function __construct(string $filename, string $path, int $permissions, int $userId, int $groupId, array $children)
     {
@@ -26,7 +26,7 @@ final class DirectoryNode extends Node
      */
     public function addChild(Node $node): void
     {
-        $this->children[$node->path] = $node;
+        $this->children[] = $node;
     }
 
     /**
@@ -34,6 +34,11 @@ final class DirectoryNode extends Node
      */
     public function removeChild(string $path): void
     {
-        unset($this->children[$path]);
+        foreach ($this->children as $index => $child) {
+            if ($child->path === $path) {
+                unset($this->children[$index]);
+                break;
+            }
+        }
     }
 }

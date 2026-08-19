@@ -10,6 +10,7 @@ use Aedon\VFS\FileNode;
 use Aedon\VFS\SymlinkNode;
 use Aedon\VFS\VirtualFileSystem;
 use PHPUnit\Framework\TestCase;
+use RuntimeException;
 
 final class VirtualFileSystemTest extends TestCase
 {
@@ -33,6 +34,7 @@ final class VirtualFileSystemTest extends TestCase
     {
         $subject = $this->buildSubject();
 
+        self::assertInstanceOf(DirectoryNode::class, $subject->node('/'));
         self::assertInstanceOf(DirectoryNode::class, $subject->node('directoryA'));
         self::assertInstanceOf(FileNode::class, $subject->node('directoryA/filename'));
         self::assertInstanceOf(DirectoryNode::class, $subject->node('directoryB'));
@@ -46,6 +48,7 @@ final class VirtualFileSystemTest extends TestCase
         self::assertEquals('z', $subject->node('z')->filename);
         self::assertEquals('y', $subject->node('z/y')->filename);
 
+        self::assertEquals(VirtualFileSystem::PROTOCOL_PATH . '/', $subject->path('/'));
         self::assertEquals(VirtualFileSystem::PROTOCOL_PATH . '/directoryA', $subject->path('directoryA'));
         self::assertEquals(VirtualFileSystem::PROTOCOL_PATH . '/directoryA/filename', $subject->path('directoryA/filename'));
         self::assertEquals(VirtualFileSystem::PROTOCOL_PATH . '/directoryB', $subject->path('directoryB'));
@@ -69,21 +72,21 @@ final class VirtualFileSystemTest extends TestCase
         $subject = $this->buildSubject();
 
         self::assertEquals([
-            'directoryA' => new DirectoryNode('directoryA', 'directoryA', VirtualFileSystem::DEFAULT_PERMISSIONS, VirtualFileSystem::DEFAULT_USER_ID, VirtualFileSystem::DEFAULT_GROUP_ID, [
-                'directoryA/filename' => new FileNode('filename', 'directoryA/filename', VirtualFileSystem::DEFAULT_PERMISSIONS, VirtualFileSystem::DEFAULT_USER_ID, VirtualFileSystem::DEFAULT_GROUP_ID, 'directoryAfilenameContent'),
+            new FileNode('filename', 'directoryA/filename', VirtualFileSystem::DEFAULT_PERMISSIONS, VirtualFileSystem::DEFAULT_USER_ID, VirtualFileSystem::DEFAULT_GROUP_ID, 'directoryAfilenameContent'),
+            new DirectoryNode('directoryA', 'directoryA', VirtualFileSystem::DEFAULT_PERMISSIONS, VirtualFileSystem::DEFAULT_USER_ID, VirtualFileSystem::DEFAULT_GROUP_ID, [
+                new FileNode('filename', 'directoryA/filename', VirtualFileSystem::DEFAULT_PERMISSIONS, VirtualFileSystem::DEFAULT_USER_ID, VirtualFileSystem::DEFAULT_GROUP_ID, 'directoryAfilenameContent'),
             ]),
-            'directoryA/filename' => new FileNode('filename', 'directoryA/filename', VirtualFileSystem::DEFAULT_PERMISSIONS, VirtualFileSystem::DEFAULT_USER_ID, VirtualFileSystem::DEFAULT_GROUP_ID, 'directoryAfilenameContent'),
-            'directoryB' => new DirectoryNode('directoryB', 'directoryB', VirtualFileSystem::DEFAULT_PERMISSIONS, VirtualFileSystem::DEFAULT_USER_ID, VirtualFileSystem::DEFAULT_GROUP_ID, [
-                'directoryB/directoryC' => new DirectoryNode('directoryC', 'directoryB/directoryC', VirtualFileSystem::DEFAULT_PERMISSIONS, VirtualFileSystem::DEFAULT_USER_ID, VirtualFileSystem::DEFAULT_GROUP_ID, [
-                    'directoryB/directoryC/filename' => new FileNode('filename', 'directoryB/directoryC/filename', VirtualFileSystem::DEFAULT_PERMISSIONS, VirtualFileSystem::DEFAULT_USER_ID, VirtualFileSystem::DEFAULT_GROUP_ID, 'directoryBdirectoryCfilenameContent'),
+            new FileNode('filename', 'directoryB/directoryC/filename', VirtualFileSystem::DEFAULT_PERMISSIONS, VirtualFileSystem::DEFAULT_USER_ID, VirtualFileSystem::DEFAULT_GROUP_ID, 'directoryBdirectoryCfilenameContent'),
+            new DirectoryNode('directoryC', 'directoryB/directoryC', VirtualFileSystem::DEFAULT_PERMISSIONS, VirtualFileSystem::DEFAULT_USER_ID, VirtualFileSystem::DEFAULT_GROUP_ID, [
+                new FileNode('filename', 'directoryB/directoryC/filename', VirtualFileSystem::DEFAULT_PERMISSIONS, VirtualFileSystem::DEFAULT_USER_ID, VirtualFileSystem::DEFAULT_GROUP_ID, 'directoryBdirectoryCfilenameContent'),
+            ]),
+            new DirectoryNode('directoryB', 'directoryB', VirtualFileSystem::DEFAULT_PERMISSIONS, VirtualFileSystem::DEFAULT_USER_ID, VirtualFileSystem::DEFAULT_GROUP_ID, [
+                new DirectoryNode('directoryC', 'directoryB/directoryC', VirtualFileSystem::DEFAULT_PERMISSIONS, VirtualFileSystem::DEFAULT_USER_ID, VirtualFileSystem::DEFAULT_GROUP_ID, [
+                    new FileNode('filename', 'directoryB/directoryC/filename', VirtualFileSystem::DEFAULT_PERMISSIONS, VirtualFileSystem::DEFAULT_USER_ID, VirtualFileSystem::DEFAULT_GROUP_ID, 'directoryBdirectoryCfilenameContent'),
                 ]),
             ]),
-            'directoryB/directoryC' => new DirectoryNode('directoryC', 'directoryB/directoryC', VirtualFileSystem::DEFAULT_PERMISSIONS, VirtualFileSystem::DEFAULT_USER_ID, VirtualFileSystem::DEFAULT_GROUP_ID, [
-                'directoryB/directoryC/filename' => new FileNode('filename', 'directoryB/directoryC/filename', VirtualFileSystem::DEFAULT_PERMISSIONS, VirtualFileSystem::DEFAULT_USER_ID, VirtualFileSystem::DEFAULT_GROUP_ID, 'directoryBdirectoryCfilenameContent'),
-            ]),
-            'directoryB/directoryC/filename' => new FileNode('filename', 'directoryB/directoryC/filename', VirtualFileSystem::DEFAULT_PERMISSIONS, VirtualFileSystem::DEFAULT_USER_ID, VirtualFileSystem::DEFAULT_GROUP_ID, 'directoryBdirectoryCfilenameContent'),
-            'filename' => new FileNode('filename', 'filename', VirtualFileSystem::DEFAULT_PERMISSIONS, VirtualFileSystem::DEFAULT_USER_ID, VirtualFileSystem::DEFAULT_GROUP_ID, 'filenameContent'),
-            'symlink' => new SymlinkNode('symlink', 'symlink', VirtualFileSystem::DEFAULT_SYMLINK_PERMISSIONS, VirtualFileSystem::DEFAULT_USER_ID, VirtualFileSystem::DEFAULT_GROUP_ID, '@directoryB/directoryC/filename', new FileNode('filename', 'directoryB/directoryC/filename', VirtualFileSystem::DEFAULT_PERMISSIONS, VirtualFileSystem::DEFAULT_USER_ID, VirtualFileSystem::DEFAULT_GROUP_ID, 'directoryBdirectoryCfilenameContent')),
+            new FileNode('filename', 'filename', VirtualFileSystem::DEFAULT_PERMISSIONS, VirtualFileSystem::DEFAULT_USER_ID, VirtualFileSystem::DEFAULT_GROUP_ID, 'filenameContent'),
+            new SymlinkNode('symlink', 'symlink', VirtualFileSystem::DEFAULT_SYMLINK_PERMISSIONS, VirtualFileSystem::DEFAULT_USER_ID, VirtualFileSystem::DEFAULT_GROUP_ID, '@directoryB/directoryC/filename', new FileNode('filename', 'directoryB/directoryC/filename', VirtualFileSystem::DEFAULT_PERMISSIONS, VirtualFileSystem::DEFAULT_USER_ID, VirtualFileSystem::DEFAULT_GROUP_ID, 'directoryBdirectoryCfilenameContent')),
         ], $subject->getNodes());
     }
 
@@ -125,11 +128,19 @@ final class VirtualFileSystemTest extends TestCase
         $node = $subject->node('directoryA/anotherfile');
 
         self::assertEquals('anotherfilecontent', $node->content);
+    }
 
-        /** @var DirectoryNode $node */
-        $node = $subject->node('directoryA');
+    public function testShouldAddFileToRoot(): void
+    {
+        $subject = $this->buildSubject();
 
-        self::assertInstanceOf(FileNode::class, $node->children['directoryA/anotherfile']);
+        $subject->addFile('newfile', 'newfilecontent');
+
+        /** @var FileNode $node */
+        $node = $subject->node('newfile');
+
+        self::assertInstanceOf(FileNode::class, $node);
+        self::assertEquals('newfilecontent', $node->content);
     }
 
     public function testShouldAddEmptyDirectory(): void
@@ -142,6 +153,20 @@ final class VirtualFileSystemTest extends TestCase
 
         /** @var DirectoryNode $node */
         $node = $subject->node('directoryA/newDirectory');
+
+        self::assertEquals([], $node->children);
+    }
+
+    public function testShouldAddDirectoryToRoot(): void
+    {
+        $subject = $this->buildSubject();
+
+        $subject->addDirectory('newDirectory');
+
+        self::assertInstanceOf(DirectoryNode::class, $subject->node('newDirectory'));
+
+        /** @var DirectoryNode $node */
+        $node = $subject->node('newDirectory');
 
         self::assertEquals([], $node->children);
     }
@@ -181,13 +206,6 @@ final class VirtualFileSystemTest extends TestCase
         $node = $subject->node('directoryA/newDirectory/directory');
 
         self::assertCount(1, $node->children);
-
-        $nodes = $subject->getNodes();
-
-        self::assertArrayHasKey('directoryA/newDirectory', $nodes);
-        self::assertArrayHasKey('directoryA/newDirectory/filename', $nodes);
-        self::assertArrayHasKey('directoryA/newDirectory/directory', $nodes);
-        self::assertArrayHasKey('directoryA/newDirectory/directory/filename', $nodes);
     }
 
     public function testShouldAddSymlink(): void
@@ -204,6 +222,20 @@ final class VirtualFileSystemTest extends TestCase
         self::assertCount(2, $node->children);
     }
 
+    public function testShouldAddSymlinkToRoot(): void
+    {
+        $subject = $this->buildSubject();
+
+        $subject->addSymlink('newlink', 'directoryA/filename');
+
+        self::assertInstanceOf(SymlinkNode::class, $subject->node('newlink'));
+
+        /** @var SymlinkNode $node */
+        $node = $subject->node('newlink');
+
+        self::assertEquals('directoryA/filename', $node->target);
+    }
+
     public function testShouldRemoveNode(): void
     {
         $subject = $this->buildSubject();
@@ -216,6 +248,15 @@ final class VirtualFileSystemTest extends TestCase
         $node = $subject->node('directoryA');
 
         self::assertCount(0, $node->children);
+    }
+
+    public function testShouldThrowExceptionWhenRemovingRootNode(): void
+    {
+        $subject = $this->buildSubject();
+
+        $this->expectException(RuntimeException::class);
+
+        $subject->removeNode('/');
     }
 
     public function testShouldRemoveNodeRecursive(): void
@@ -233,14 +274,87 @@ final class VirtualFileSystemTest extends TestCase
     {
         $subject = $this->buildSubject();
 
-        self::assertNull($subject->directory('directoryA'));
-        self::assertNull($subject->directory('filename'));
-
+        self::assertInstanceOf(DirectoryNode::class, $subject->directory('directoryA'));
+        self::assertInstanceOf(DirectoryNode::class, $subject->directory('filename'));
         self::assertInstanceOf(DirectoryNode::class, $subject->directory('directoryB/directoryC/filename'));
 
         /** @var DirectoryNode $node */
         $node = $subject->directory('directoryB/directoryC/filename');
 
         self::assertEquals('directoryB/directoryC', $node->path);
+    }
+
+    public function testShouldRenameFile(): void
+    {
+        $subject = $this->buildSubject();
+
+        $subject->renameNode('directoryA/filename', 'directoryA/newfilename');
+
+        self::assertInstanceOf(EmptyNode::class, $subject->node('directoryA/filename'));
+        self::assertInstanceOf(FileNode::class, $subject->node('directoryA/newfilename'));
+
+        /** @var DirectoryNode $directory */
+        $directory = $subject->directory('directoryA/newfilename');
+
+        self::assertCount(1, $directory->children);
+        self::assertInstanceOf(FileNode::class, $directory->children[0]);
+    }
+
+    public function testShouldRenameSymlink(): void
+    {
+        $subject = $this->buildSubject();
+
+        $subject->renameNode('symlink', 'newsymlink');
+
+        self::assertInstanceOf(EmptyNode::class, $subject->node('symlink'));
+        self::assertInstanceOf(SymlinkNode::class, $subject->node('newsymlink'));
+
+        /** @var DirectoryNode $directory */
+        $directory = $subject->directory('newsymlink');
+
+        self::assertCount(4, $directory->children);
+        self::assertInstanceOf(SymlinkNode::class, $directory->children[3]);
+    }
+
+    public function testShouldRenameDirectory(): void
+    {
+        $subject = $this->buildSubject();
+
+        $subject->renameNode('directoryA', 'directoryAnew');
+
+        self::assertInstanceOf(EmptyNode::class, $subject->node('directoryA'));
+        self::assertInstanceOf(DirectoryNode::class, $subject->node('directoryAnew'));
+
+        /** @var DirectoryNode $directory */
+        $directory = $subject->directory('directoryAnew');
+
+        self::assertCount(4, $directory->children);
+        self::assertInstanceOf(DirectoryNode::class, $directory->children[0]);
+        self::assertEquals('directoryAnew', $directory->children[0]->path);
+    }
+
+    public function testShouldUpdateSymlinksWhenRenamingTargetNode(): void
+    {
+        $subject = $this->buildSubject();
+
+        $subject->renameNode('directoryB/directoryC/filename', 'directoryB/directoryC/newfilename');
+
+        self::assertInstanceOf(EmptyNode::class, $subject->node('directoryB/directoryC/filename'));
+        self::assertInstanceOf(FileNode::class, $subject->node('directoryB/directoryC/newfilename'));
+
+        /** @var SymlinkNode $symlinkNode */
+        $symlinkNode = $subject->node('symlink');
+
+        self::assertEquals('@directoryB/directoryC/newfilename', $symlinkNode->target);
+        self::assertEquals($subject->node('directoryB/directoryC/newfilename'), $symlinkNode->linkTarget);
+    }
+
+    public function testShouldThrowExceptionWhenRenamingRootNode(): void
+    {
+        $subject = $this->buildSubject();
+
+        $this->expectException(RuntimeException::class);
+
+        $subject->renameNode('/', 'directoryA2');
     }
 }

@@ -7,8 +7,7 @@ namespace Aedon\VFS;
 use RuntimeException;
 
 use function array_keys;
-use function assert;
-use function basename;
+use function dirname;
 use function in_array;
 use function is_array;
 use function str_contains;
@@ -16,6 +15,7 @@ use function str_replace;
 use function str_starts_with;
 use function stream_get_wrappers;
 use function stream_wrapper_register;
+use function strlen;
 use function strrpos;
 use function substr;
 
@@ -31,8 +31,10 @@ final class VirtualFileSystem
     static private VirtualFileSystem|null $vfs = null;
     static private int $defaultPermissions = self::DEFAULT_PERMISSIONS;
 
-    /** @var array<string, Node> */
+    /** @var array<array-key, Node> */
     private array $nodes = [];
+
+    private DirectoryNode $root;
 
     /**
      * @internal
@@ -40,7 +42,21 @@ final class VirtualFileSystem
     private function __construct(array $defaultStructure = [], int $defaultPermissions = self::DEFAULT_PERMISSIONS)
     {
         self::$defaultPermissions = $defaultPermissions;
+
         $this->recursiveCreateNodes('', $defaultStructure, $defaultPermissions);
+
+        $rootChildren = [];
+
+        foreach ($this->nodes as $node) {
+            if (str_contains($node->path, '/')) {
+                continue;
+            }
+
+            $rootChildren[] = $node;
+        }
+
+        $this->root = new DirectoryNode('/', '/', $defaultPermissions, self::DEFAULT_USER_ID, self::DEFAULT_GROUP_ID, $rootChildren);
+
         $this->rewriteSymlinks();
     }
 
@@ -71,10 +87,10 @@ final class VirtualFileSystem
                         continue;
                     }
 
-                    $children[$node->path] = $node;
+                    $children[] = $node;
                 }
 
-                $this->nodes[$currentKey] = new DirectoryNode(
+                $this->nodes[] = new DirectoryNode(
                     $key,
                     $currentKey,
                     $defaultPermissions,
@@ -84,7 +100,7 @@ final class VirtualFileSystem
                 );
             } else {
                 if (str_starts_with($value, '@')) {
-                    $this->nodes[$currentKey] = new SymlinkNode(
+                    $this->nodes[] = new SymlinkNode(
                         $key,
                         $currentKey,
                         $defaultPermissions === self::DEFAULT_PERMISSIONS ? self::DEFAULT_SYMLINK_PERMISSIONS : $defaultPermissions,
@@ -93,7 +109,7 @@ final class VirtualFileSystem
                         $value
                     );
                 } else {
-                    $this->nodes[$currentKey] = new FileNode(
+                    $this->nodes[] = new FileNode(
                         $key,
                         $currentKey,
                         $defaultPermissions,
@@ -112,11 +128,13 @@ final class VirtualFileSystem
             if ($node instanceof SymlinkNode) {
                 $target = substr($node->target, 1);
 
-                if (!isset($this->nodes[$target])) {
+                $targetNode = $this->node($target);
+
+                if ($targetNode instanceof EmptyNode) {
                     throw new RuntimeException('Symlink has invalid target "' . $target . '" or file content starts with "@"');
                 }
 
-                $node->linkTarget = $this->nodes[$target];
+                $node->linkTarget = $targetNode;
             }
         }
     }
@@ -161,15 +179,26 @@ final class VirtualFileSystem
      */
     public function node(string $path): Node
     {
+        if ($path === '/' || $path === $this->path('/')) {
+            return $this->root;
+        }
+
         // Handle path with protocol
         if (str_starts_with($path, self::PROTOCOL_PATH)) {
             $path = str_replace(self::PROTOCOL_PATH . '/', '', $path);
         }
 
-        $node = $this->nodes[$path] ?? null;
+        $currentNode = null;
 
-        if ($node !== null) {
-            return $node;
+        foreach ($this->nodes as $node) {
+            if ($node->path === $path) {
+                $currentNode = $node;
+                break;
+            }
+        }
+
+        if ($currentNode !== null) {
+            return $currentNode;
         }
 
         if (!str_contains($path, '/')) {
@@ -189,6 +218,17 @@ final class VirtualFileSystem
         return $this->nodes;
     }
 
+    private function getNodeIndexByPath(string $path): int|null
+    {
+        foreach ($this->nodes as $index => $node) {
+            if ($node->path === $path) {
+                return (int)$index;
+            }
+        }
+
+        return null;
+    }
+
     private function getFilenameFromPath(string $path): string
     {
         if (!str_contains($path, '/')) {
@@ -202,17 +242,11 @@ final class VirtualFileSystem
 
     public function addFile(string $path, string $content): void
     {
-        $filename = $this->getFilenameFromPath($path);
-
-        if (str_contains($path, '/')) {
-            $parentPath = substr($path, 0, (int)strrpos($path, '/'));
-
-            $parentNode = $this->node($parentPath);
-
-            if (!$parentNode instanceof DirectoryNode) {
-                throw new RuntimeException('Can only add file to a directory node');
-            }
+        if (!($this->node($path) instanceof EmptyNode)) {
+            throw new RuntimeException('File already exists');
         }
+
+        $filename = $this->getFilenameFromPath($path);
 
         $fileNode = new FileNode(
             $filename,
@@ -223,27 +257,22 @@ final class VirtualFileSystem
             $content
         );
 
-        $this->nodes[$path] = $fileNode;
+        $this->nodes[] = $fileNode;
 
-        if (isset($parentNode)) {
-            assert($parentNode instanceof DirectoryNode);
+        $parentNode = $this->directory($path);
+
+        if ($parentNode instanceof DirectoryNode) {
             $parentNode->addChild($fileNode);
         }
     }
 
     public function addDirectory(string $path, array $structure = []): void
     {
-        $filename = $this->getFilenameFromPath($path);
-
-        if (str_contains($path, '/')) {
-            $parentPath = substr($path, 0, (int)strrpos($path, '/'));
-
-            $parentNode = $this->node($parentPath);
-
-            if (!$parentNode instanceof DirectoryNode) {
-                throw new RuntimeException('Can only add file to a directory node');
-            }
+        if (!($this->node($path) instanceof EmptyNode)) {
+            throw new RuntimeException('Directory already exists');
         }
+
+        $filename = $this->getFilenameFromPath($path);
 
         $this->recursiveCreateNodes($path, $structure, self::$defaultPermissions);
 
@@ -251,7 +280,7 @@ final class VirtualFileSystem
 
         foreach (array_keys($structure) as $childPath) {
             /** @var string $childPath */
-            $children[$childPath] = $this->node($childPath);
+            $children[] = $this->node($childPath);
         }
 
         $directoryNode = new DirectoryNode(
@@ -263,16 +292,21 @@ final class VirtualFileSystem
             $children
         );
 
-        $this->nodes[$path] = $directoryNode;
+        $this->nodes[] = $directoryNode;
 
-        if (isset($parentNode)) {
-            assert($parentNode instanceof DirectoryNode);
+        $parentNode = $this->directory($path);
+
+        if ($parentNode instanceof DirectoryNode) {
             $parentNode->addChild($directoryNode);
         }
     }
 
     public function addSymlink(string $path, string $target): void
     {
+        if (!($this->node($path) instanceof EmptyNode)) {
+            throw new RuntimeException('Symlink already exists');
+        }
+
         $targetNode = $this->node($target);
 
         if ($targetNode instanceof EmptyNode) {
@@ -280,16 +314,6 @@ final class VirtualFileSystem
         }
 
         $filename = $this->getFilenameFromPath($path);
-
-        if (str_contains($path, '/')) {
-            $parentPath = substr($path, 0, (int)strrpos($path, '/'));
-
-            $parentNode = $this->node($parentPath);
-
-            if (!$parentNode instanceof DirectoryNode) {
-                throw new RuntimeException('Can only add file to a directory node');
-            }
-        }
 
         $symlinkNode = new SymlinkNode(
             $filename,
@@ -300,29 +324,35 @@ final class VirtualFileSystem
             $target
         );
 
-        $this->nodes[$path] = $symlinkNode;
+        $this->nodes[] = $symlinkNode;
 
-        if (isset($parentNode)) {
-            assert($parentNode instanceof DirectoryNode);
+        $parentNode = $this->directory($path);
+
+        if ($parentNode instanceof DirectoryNode) {
             $parentNode->addChild($symlinkNode);
         }
     }
 
+    /**
+     * @internal
+     */
     public function removeNode(string $path): void
     {
-        if (str_contains($path, '/')) {
-            $parentPath = substr($path, 0, (int)strrpos($path, '/'));
-
-            $parentNode = $this->node($parentPath);
-
-            if (!$parentNode instanceof DirectoryNode) {
-                throw new RuntimeException('Parent node must be a directory node');
-            }
-
-            $parentNode->removeChild($path);
+        if ($path === '/') {
+            throw new RuntimeException('Cannot remove root');
         }
 
         $node = $this->node($path);
+
+        if ($node instanceof EmptyNode) {
+            throw new RuntimeException('Node does not exist');
+        }
+
+        $parentNode = $this->directory($path);
+
+        if ($parentNode instanceof DirectoryNode) {
+            $parentNode->removeChild($path);
+        }
 
         if ($node instanceof DirectoryNode) {
             foreach ($node->children as $child) {
@@ -330,13 +360,18 @@ final class VirtualFileSystem
             }
         }
 
-        unset($this->nodes[$path]);
+        if (($index = $this->getNodeIndexByPath($path)) !== null) {
+            unset($this->nodes[$index]);
+        }
     }
 
+    /**
+     * @internal
+     */
     public function directory(string $path): DirectoryNode|null
     {
         if (!str_contains($path, '/')) {
-            return null;
+            return $this->root;
         }
 
         $parentPath = substr($path, 0, (int)strrpos($path, '/'));
@@ -350,14 +385,37 @@ final class VirtualFileSystem
         return $parentNode;
     }
 
-    public function moveDirectory(string $fromPath, string $toPath): void
+    /**
+     * @internal
+     */
+    public function renameNode(string $fromPath, string $toPath): void
     {
+        if ($fromPath === '/') {
+            throw new RuntimeException('Cannot rename root');
+        }
+
+        if (dirname($fromPath) !== dirname($toPath)) {
+            throw new RuntimeException('Cannot rename nodes in different directories');
+        }
+
+        if ($this->node($fromPath) instanceof EmptyNode) {
+            throw new RuntimeException('Node does not exist');
+        }
+
+        if (!($this->node($toPath) instanceof EmptyNode)) {
+            throw new RuntimeException('Node already exists');
+        }
+
         $fromNode = $this->node($fromPath);
+        $toNode = $this->node($toPath);
 
-        $fromNode->filename = basename($toPath);
-        $fromNode->path = $toPath;
+        foreach ($this->nodes as $node) {
+            if ($node instanceof SymlinkNode && $node->target === '@' . $fromNode->path) {
+                $node->target = '@' . $toNode->path;
+            }
+        }
 
-        $this->nodes[$toPath] = $fromNode;
-        unset($this->nodes[$fromPath]);
+        $fromNode->filename = $toNode->filename;
+        $fromNode->path = $toNode->path;
     }
 }
